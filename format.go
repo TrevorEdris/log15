@@ -48,6 +48,41 @@ func SetTermTimeFormat(fmt string) {
 	termTimeFormat = fmt
 }
 
+func SimpleFormat() Format {
+	return FormatFunc(func(r *Record) []byte {
+		var color = 0
+		switch r.Lvl {
+		case LvlCrit:
+			color = 35
+		case LvlError:
+			color = 31
+		case LvlWarn:
+			color = 33
+		case LvlInfo:
+			color = 32
+		case LvlDebug:
+			color = 36
+		}
+
+		b := &bytes.Buffer{}
+		lvl := strings.ToUpper(r.Lvl.String())
+		if color > 0 {
+			fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m %s ", color, lvl, r.Msg)
+		} else {
+			fmt.Fprintf(b, "[%s] %s ", lvl, r.Msg)
+		}
+
+		// try to justify the log output for short messages
+		if len(r.Ctx) > 0 && len(r.Msg) < termMsgJust {
+			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-len(r.Msg)))
+		}
+
+		// print the keys logfmt style
+		logfmt(b, r.Ctx, color)
+		return b.Bytes()
+	})
+}
+
 func ModuleFormat(module string) Format {
 	return FormatFunc(func(r *Record) []byte {
 		var color = 0
