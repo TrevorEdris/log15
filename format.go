@@ -12,10 +12,15 @@ import (
 )
 
 const (
-	timeFormat     = "2006-01-02T15:04:05-0700"
-	termTimeFormat = "01-02|15:04:05"
-	floatFormat    = 'f'
-	termMsgJust    = 40
+	defaultTimeFormat     = "2006-01-02T15:04:05-0700"
+	defaultTermTimeFormat = time.Stamp //"01-02|15:04:05"
+	floatFormat           = 'f'
+	termMsgJust           = 40
+)
+
+var (
+	timeFormat     = defaultTimeFormat
+	termTimeFormat = defaultTermTimeFormat
 )
 
 // Format  is the interface implemented by StreamHandler formatters.
@@ -33,6 +38,49 @@ type formatFunc func(*Record) []byte
 
 func (f formatFunc) Format(r *Record) []byte {
 	return f(r)
+}
+
+func SetTimeFormat(fmt string) {
+	timeFormat = fmt
+}
+
+func SetTermTimeFormat(fmt string) {
+	termTimeFormat = fmt
+}
+
+func ModuleFormat(module string) Format {
+	return FormatFunc(func(r *Record) []byte {
+		var color = 0
+		switch r.Lvl {
+		case LvlCrit:
+			color = 35
+		case LvlError:
+			color = 31
+		case LvlWarn:
+			color = 33
+		case LvlInfo:
+			color = 32
+		case LvlDebug:
+			color = 36
+		}
+
+		b := &bytes.Buffer{}
+		lvl := strings.ToUpper(r.Lvl.String())
+		if color > 0 {
+			fmt.Fprintf(b, "[%s] [%s] \x1b[%dm%s\x1b[0m %s ", r.Time.Format(termTimeFormat), module, color, lvl, r.Msg)
+		} else {
+			fmt.Fprintf(b, "[%s] [%s] [%s] %s ", r.Time.Format(termTimeFormat), module, lvl, r.Msg)
+		}
+
+		// try to justify the log output for short messages
+		if len(r.Ctx) > 0 && len(r.Msg) < termMsgJust {
+			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-len(r.Msg)))
+		}
+
+		// print the keys logfmt style
+		logfmt(b, r.Ctx, color)
+		return b.Bytes()
+	})
 }
 
 // TerminalFormat formats log records optimized for human readability on
@@ -64,9 +112,9 @@ func TerminalFormat() Format {
 		b := &bytes.Buffer{}
 		lvl := strings.ToUpper(r.Lvl.String())
 		if color > 0 {
-			fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), r.Msg)
+			fmt.Fprintf(b, "[%s] \x1b[%dm%s\x1b[0m %s ", r.Time.Format(termTimeFormat), color, lvl, r.Msg)
 		} else {
-			fmt.Fprintf(b, "[%s] [%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Msg)
+			fmt.Fprintf(b, "[%s] [%s] %s ", r.Time.Format(termTimeFormat), lvl, r.Msg)
 		}
 
 		// try to justify the log output for short messages
